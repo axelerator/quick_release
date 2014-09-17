@@ -1,0 +1,6 @@
+*.o
+.DS_Store
+*.jpg
+*.png
+*.bmp
+imgui.ini
