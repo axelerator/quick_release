@@ -460,12 +460,22 @@ class Rect {
 
 };
 
+typedef struct {
+	float exposure;
+	float shadows;
+  float highlights;
+  float contrast;
+} Parameters;
+
 class Geometry {
   public:
 
     Geometry(InputImage &image, const Rect &screen): inputImage(image), screen(screen) {
       shaderProgramId = LoadShaders("vertex.vertexshader", "fragment.fragmentshader");
-      exposureUniform = glGetUniformLocation(shaderProgramId,"level");
+      exposureUniform = glGetUniformLocation(shaderProgramId,"exposure");
+      shadowsUniform = glGetUniformLocation(shaderProgramId,"shadows");
+      highlightsUniform = glGetUniformLocation(shaderProgramId,"highlights");
+      contrastUniform = glGetUniformLocation(shaderProgramId,"contrast");
 
       // Get a handle for our buffers
       vertexPosition_modelspaceID = glGetAttribLocation(shaderProgramId, "vertexPosition_modelspace");
@@ -502,11 +512,14 @@ class Geometry {
       textureUniform  = glGetUniformLocation(shaderProgramId, "myTextureSampler");
     }
 
-    void draw(float exposure) {
+    void draw(Parameters *parameters) {
       // Use our shader
       glUseProgram(shaderProgramId);
 
-      glUniform1f(exposureUniform, exposure);
+      glUniform1f(exposureUniform, parameters->exposure);
+      glUniform1f(shadowsUniform, parameters->shadows);
+      glUniform1f(highlightsUniform, parameters->highlights);
+      glUniform1f(contrastUniform, parameters->contrast);
       // Set our "myTextureSampler" sampler to user Texture Unit 0
       glUniform1i(textureUniform, 0);
 
@@ -547,7 +560,7 @@ class Geometry {
       glUseProgram(0);
     }
 
-    void writeToDisk(string &path, float exposure, unsigned int width, unsigned int height) {
+    void writeToDisk(string &path, Parameters *parameters, unsigned int width, unsigned int height) {
       // PREP for render2text ------------------------------
       // The framebuffer, which regroups 0, 1, or more textures, and 0 or 1 depth buffer.
       GLuint FramebufferName = 0;
@@ -600,7 +613,7 @@ class Geometry {
       glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
       glClear(GL_COLOR_BUFFER_BIT);
       //
-      this->draw(exposure);
+      this->draw(parameters);
 
       unsigned char *pixel_data = new unsigned char [width * height * 3];
       glReadPixels(0,0,width,height, GL_RGB, GL_UNSIGNED_BYTE, pixel_data);
@@ -623,6 +636,9 @@ class Geometry {
 
     GLuint shaderProgramId;
     GLuint exposureUniform;
+    GLuint shadowsUniform;
+    GLuint highlightsUniform;
+    GLuint contrastUniform;
     GLuint textureUniform;
     GLuint vertexPosition_modelspaceID ;
     GLuint vertexUVID;
@@ -636,7 +652,10 @@ class Geometry {
 int main(int argc, char** argv)
 {
   InitGL();
-  static float foo = 1.0f;
+  Parameters parameters = { .exposure = 1.0,
+                            .shadows = 0.0,
+                            .highlights = 0.0,
+                            .contrast = 0.0};
   int w, h;
   glfwGetWindowSize(window, &w, &h);
   const Rect screen(w, h);
@@ -690,9 +709,15 @@ int main(int argc, char** argv)
         {
             const ImGuiWindowFlags layout_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove ;
             ImGui::SetNewWindowDefaultPos(ImVec2(0,0));
-            ImGui::Begin("Adjustments", &show_controls, ImVec2(200,100), 1.0, layout_flags);
+            ImGui::Begin("Adjustments", &show_controls, ImVec2(200,500), 1.0, layout_flags);
             ImGui::Text("Exposure");
-            ImGui::SliderFloat("f0", &foo, 0.0f,2.0f);
+            ImGui::SliderFloat("f0", &parameters.exposure, 0.0f,2.0f);
+            ImGui::Text("Shadows");
+            ImGui::SliderFloat("f1", &parameters.shadows, 0.0f,1.0f);
+            ImGui::Text("Highlights");
+            ImGui::SliderFloat("f2", &parameters.highlights, 0.0f,1.0f);
+            ImGui::Text("Contrast");
+            ImGui::SliderFloat("f3", &parameters.contrast, 0.0f,1.0f);
             if (ImGui::Button("Save")) {save_now = true;}
             ImGui::End();
         }
@@ -702,12 +727,12 @@ int main(int argc, char** argv)
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        g.draw(foo);
+        g.draw(&parameters);
         ImGui::Render();
         glfwSwapBuffers(window);
     }
     std::string f("foo.png");
-    g.writeToDisk(f, foo, 1280, 1024);
+    //g.writeToDisk(f, foo, 1280, 1024);
     ImGui::Shutdown();
     glfwTerminate();
 
