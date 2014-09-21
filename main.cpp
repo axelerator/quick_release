@@ -1,15 +1,6 @@
 #define GLEW_STATIC
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
-#define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb/stb_image.h"                  // for .png loading
-#include "stb/stb_image_write.h"
-#include "imgui/imgui.h"
-#ifdef _MSC_VER
-#pragma warning (disable: 4996)         // 'This function or variable may be unsafe': strcpy, strdup, sprintf, vsnprintf, sscanf, fopen
-#endif
-
 #include <stdio.h>
 #include <fstream>
 #include <vector>
@@ -17,6 +8,15 @@
 #include <math.h>
 #include <iostream>
 #include <string>
+
+#define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "include/stb/stb_image.h"                  // for .png loading
+#include "include/stb/stb_image_write.h"
+#include "include/imgui/imgui.h"
+#ifdef _MSC_VER
+#pragma warning (disable: 4996)         // 'This function or variable may be unsafe': strcpy, strdup, sprintf, vsnprintf, sscanf, fopen
+#endif
 
 #define debug(format, arg) printf(format, arg)
 
