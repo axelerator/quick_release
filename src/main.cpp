@@ -14,6 +14,7 @@
 #include "../include/stb/stb_image.h"                  // for .png loading
 #include "../include/stb/stb_image_write.h"
 #include "../include/imgui/imgui.h"
+#include "../include/json11/json11.hpp"
 #ifdef _MSC_VER
 #pragma warning (disable: 4996)         // 'This function or variable may be unsafe': strcpy, strdup, sprintf, vsnprintf, sscanf, fopen
 #endif
