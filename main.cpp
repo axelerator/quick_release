@@ -661,7 +661,7 @@ int main(int argc, char** argv)
   const Rect screen(w, h);
 
 
-  InputImage tesla("fo_o.png");
+  InputImage tesla("stone.jpg");
   Geometry g(tesla, screen);
   InitImGui();
   bool save_now = false;
@@ -718,7 +718,8 @@ int main(int argc, char** argv)
             ImGui::SliderFloat("f2", &parameters.highlights, 0.0f,1.0f);
             ImGui::Text("Contrast");
             ImGui::SliderFloat("f3", &parameters.contrast, 0.0f,1.0f);
-            if (ImGui::Button("Save")) {save_now = true;}
+            std::string fout("out.png");
+            if (ImGui::Button("Save")) {g.writeToDisk(fout, &parameters, 1280,1024);}
             ImGui::End();
         }
 
