@@ -10,8 +10,10 @@ CXXFLAGS+=-lglew -lglfw3
 CXXFLAGS+=-I../../
 CXXFLAGS+= -D__APPLE__
 
-main: main.cpp include/imgui/imgui.cpp
-	$(CXX) $(CXXFLAGS) -o $@ $^
+EXECUTABLE=build/quickrelease
+
+all: src/main.cpp include/imgui/imgui.cpp
+	$(CXX) $(CXXFLAGS) -o $(EXECUTABLE)  $^
 
 clean:
 	rm main
