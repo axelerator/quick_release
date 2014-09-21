@@ -5,3 +5,5 @@
 *.bmp
 imgui.ini
 main
+build/*
+*.cfg

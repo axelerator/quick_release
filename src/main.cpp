@@ -8,6 +8,7 @@
 #include <math.h>
 #include <iostream>
 #include <string>
+#include <ftw.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -25,8 +26,82 @@ using namespace std;
 static GLFWwindow* window;
 static GLuint fontTex;
 
+enum Errors {
+
+};
 
 enum InputImageState {NEW, LOADED, FAILED};
+
+
+
+class Config {
+  public:
+  Config(const std::string path) : path(path) {};
+
+  void load() {
+    FILE *handler = fopen(path.c_str(),"r");
+    if (handler) {
+      char *configString = readFile(handler);
+      string err;
+      json11::Json configJson = json11::Json::parse(configString, err);
+    } else {
+
+    }
+  }
+
+  void save() {
+    json11::Json::array jsonDirs;
+    for (auto &dir : directories) {
+      jsonDirs.push_back(dir);
+    }
+
+    json11::Json jsonConfig = json11::Json::object({
+        { "directories", jsonDirs }
+        });
+
+    std::string jsonStr = jsonConfig.dump();
+    std::ofstream outfile (path,std::ofstream::binary);
+    outfile.write (jsonStr.c_str(), jsonStr.length());
+    outfile.close();
+  }
+  private:
+
+  char* readFile(FILE *handler) {
+    char *buffer = NULL;
+    int string_size,read_size;
+
+    if (handler)
+    {
+      //seek the last byte of the file
+      fseek(handler,0,SEEK_END);
+      //offset from the first to the last byte, or in other words, filesize
+      string_size = ftell (handler);
+      //go back to the start of the file
+      rewind(handler);
+
+      //allocate a string that can hold it all
+      buffer = (char*) malloc (sizeof(char) * (string_size + 1) );
+      //read it all in one operation
+      read_size = fread(buffer,sizeof(char),string_size,handler);
+      //fread doesnt set it so put a \0 in the last position
+      //and buffer is now officialy a string
+      buffer[string_size] = '\0';
+
+      if (string_size != read_size) {
+        //something went wrong, throw away the memory and set
+        //the buffer to NULL
+        free(buffer);
+        buffer = NULL;
+      }
+    }
+
+    return buffer;
+  }
+
+
+  const std::string path;
+  const std::vector<string> directories;
+};
 
 class InputImage {
   public:
@@ -648,10 +723,95 @@ class Geometry {
 
 };
 
+#include <limits.h>     /* for PATH_MAX */
+#include <unistd.h>	/* for getdtablesize(), getcwd() declarations */
+
+class DirTree;
+
+DirTree *currentDirTree;
+extern int ftwCallback(const char *file, const struct stat *sb, int flag, struct FTW *s);
+
+class DirTreeNode {
+  public:
+  DirTreeNode(const std::string &name, DirTreeNode *parent) : name(name), parent(parent) {}
+
+  DirTreeNode *add(const char *name) {
+    std::string fileName = name;
+    DirTreeNode *child = new DirTreeNode(fileName, this);
+    children.push_back(child);
+    return child;
+  }
+
+  const std::string fullPath() {
+    auto prefix = parent ? parent->fullPath() : "";
+    return  + "/" + name;
+  }
+
+  void inspect() {
+    std::cout << fullPath() << std::endl;
+    for (auto child : children) {
+      std::cout << child->fullPath() << std::endl;
+
+    }
+  }
+
+  std::string name;
+  DirTreeNode *parent;
+  std::vector<DirTreeNode *> children;
+};
+
+class DirTree {
+  public:
+  DirTree(const std::string &rootName) {
+    currentDirTree = this;
+    int flags = FTW_PHYS;
+    currentLvl = 1;
+    int res = nftw(rootName.c_str(), ftwCallback,2, flags);
+    root = new DirTreeNode(rootName, 0);
+    currentParent = root;
+    lastNode = root;
+  }
+
+  void inspect() {
+    root->inspect();
+  }
+
+  void add(const char* name, int level) {
+    if (currentLvl == 0) return;
+    if (level > currentLvl) {
+      currentParent = lastNode;
+    } else if (level < currentLvl) {
+      currentParent = currentParent->parent;
+    }
+    lastNode = currentParent->add(name);
+    currentLvl = level;
+  };
+
+  private:
+  int currentLvl;
+  DirTreeNode *root;
+  DirTreeNode *currentParent;
+  DirTreeNode *lastNode;
+};
+
+int ftwCallback(const char *file, const struct stat *sb, int flag, struct FTW *s) {
+	int retval = 0;
+	const char *name = file + s->base;
+
+	//printf("%*s", s->level , "");	/* indent over */
+
+  if (flag == FTW_D) {
+		printf("%s (directory)%i\n", name, s->level);
+    currentDirTree->add(name, s->level);
+  }
+  return 0;
+}
+
 
 // Application code
 int main(int argc, char** argv)
 {
+  Config config(".quickrelease.cfg");
   InitGL();
   Parameters parameters = { .exposure = 1.0,
                             .shadows = 0.0,
@@ -662,8 +822,8 @@ int main(int argc, char** argv)
   const Rect screen(w, h);
 
 
-  InputImage tesla("stone.jpg");
-  Geometry g(tesla, screen);
+  //InputImage tesla("stone.jpg");
+  //Geometry g(tesla, screen);
   InitImGui();
   bool save_now = false;
 
@@ -674,7 +834,7 @@ int main(int argc, char** argv)
         glfwPollEvents();
         UpdateImGui();
 
-        static bool show_test_window = false;
+        static bool show_test_window = true;
         static bool show_debug_window = false;
         static bool show_controls = true;
         static float f;
@@ -720,7 +880,7 @@ int main(int argc, char** argv)
             ImGui::Text("Contrast");
             ImGui::SliderFloat("f3", &parameters.contrast, 0.0f,1.0f);
             std::string fout("out.png");
-            if (ImGui::Button("Save")) {g.writeToDisk(fout, &parameters, 1280,1024);}
+            //if (ImGui::Button("Save")) {g.writeToDisk(fout, &parameters, 1280,1024);}
             ImGui::End();
         }
 
@@ -729,15 +889,14 @@ int main(int argc, char** argv)
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        g.draw(&parameters);
+        //g.draw(&parameters);
         ImGui::Render();
         glfwSwapBuffers(window);
     }
-    std::string f("foo.png");
-    //g.writeToDisk(f, foo, 1280, 1024);
     ImGui::Shutdown();
     glfwTerminate();
-
-
+    config.save();
+    DirTree d("./");
+    //d.inspect();
     return 0;
 }
