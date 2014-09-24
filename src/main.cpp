@@ -733,11 +733,12 @@ extern int ftwCallback(const char *file, const struct stat *sb, int flag, struct
 
 class DirTreeNode {
   public:
-  DirTreeNode(const std::string &name, DirTreeNode *parent) : name(name), parent(parent) {}
+  DirTreeNode(const std::string &name, DirTreeNode *parent, int level) : name(name), parent(parent), level(level) {}
 
-  DirTreeNode *add(const char *name) {
+  DirTreeNode *add(const char *name, int level) {
+    std::cout << "adding " << name << " to " << this->name << std::endl;
     std::string fileName = name;
-    DirTreeNode *child = new DirTreeNode(fileName, this);
+    DirTreeNode *child = new DirTreeNode(fileName, this, level);
     children.push_back(child);
     return child;
   }
@@ -748,28 +749,42 @@ class DirTreeNode {
   }
 
   void inspect() {
-    std::cout << fullPath() << std::endl;
+    printf("%*s", level , "");	/* indent over */
+    std::cout << fullPath() << "(" << children.size() << ")" << std::endl;
     for (auto child : children) {
-      std::cout << child->fullPath() << std::endl;
+      child->inspect();
+    }
+  }
 
+  void mkImgui() {
+    if (children.size()) {
+        ImGui::TreeNode(name.c_str());
+        for (auto child : children) {
+          child->mkImgui();
+        }
+        ImGui::TreePop();
+    } else {
+        ImGui::Text(name.c_str()); ImGui::NextColumn();
     }
   }
 
   std::string name;
   DirTreeNode *parent;
+  int level;
   std::vector<DirTreeNode *> children;
 };
 
 class DirTree {
   public:
   DirTree(const std::string &rootName) {
+    std::cout << "AAAAAAAAAA" << std::endl;
     currentDirTree = this;
     int flags = FTW_PHYS;
-    currentLvl = 1;
-    int res = nftw(rootName.c_str(), ftwCallback,2, flags);
-    root = new DirTreeNode(rootName, 0);
+    currentLvl = 0;
+    root = new DirTreeNode(rootName, 0, 0);
     currentParent = root;
     lastNode = root;
+    int res = nftw(rootName.c_str(), ftwCallback,4, flags);
   }
 
   void inspect() {
@@ -777,15 +792,38 @@ class DirTree {
   }
 
   void add(const char* name, int level) {
-    if (currentLvl == 0) return;
+    if (level == 0) return;
+    if (level == lastNode->level) {
+      lastNode = lastNode->parent->add(name, level);
+    } else if (level > lastNode->level) {
+      lastNode = lastNode->add(name, level);
+    } else if (level < lastNode->level) {
+      int steps = lastNode->level - level + 1;
+      DirTreeNode *p = lastNode;
+      for (int i = 0; i < steps; ++i) {
+        p = p->parent;
+      }
+
+      if (!p) {std::cout << "current parent nil" << std::endl; exit(0);}
+      lastNode = p->add(name, level);
+    }
+
+    /*
     if (level > currentLvl) {
       currentParent = lastNode;
     } else if (level < currentLvl) {
+      if (!currentParent) {std::cout << "current parent nil(pop)" << std::endl; exit(0);}
       currentParent = currentParent->parent;
     }
+    if (!currentParent) {std::cout << "current parent nil" << std::endl; exit(0);}
     lastNode = currentParent->add(name);
     currentLvl = level;
+    */
   };
+
+  void imgui() {
+    root->mkImgui();
+  }
 
   private:
   int currentLvl;
@@ -826,6 +864,7 @@ int main(int argc, char** argv)
   //Geometry g(tesla, screen);
   InitImGui();
   bool save_now = false;
+    DirTree d("./");
 
   while (!glfwWindowShouldClose(window))
     {
@@ -836,8 +875,9 @@ int main(int argc, char** argv)
 
         static bool show_test_window = true;
         static bool show_debug_window = false;
-        static bool show_controls = true;
+        static bool show_controls = false;
         static float f;
+        d.imgui();
         if (show_debug_window) {
           // Create a simple window
           // Tip: if we don't call ImGui::Begin()/ImGui::End() the widgets appears in a window automatically called "Debug"
@@ -896,7 +936,6 @@ int main(int argc, char** argv)
     ImGui::Shutdown();
     glfwTerminate();
     config.save();
-    DirTree d("./");
-    //d.inspect();
+    d.inspect();
     return 0;
 }
