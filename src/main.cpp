@@ -758,13 +758,19 @@ class DirTreeNode {
 
   void mkImgui() {
     if (children.size()) {
-        ImGui::TreeNode(name.c_str());
+      const bool open = ImGui::TreeNode(name.c_str());
+      ImGui::SameLine();      
+      const bool log_to_file = ImGui::SmallButton("add");
+      if (open) {
         for (auto child : children) {
           child->mkImgui();
         }
         ImGui::TreePop();
+      }
     } else {
-        ImGui::Text(name.c_str()); ImGui::NextColumn();
+        ImGui::Text(name.c_str());
+        ImGui::SameLine();      
+        const bool log_to_file = ImGui::SmallButton("add");
     }
   }
 
@@ -777,7 +783,6 @@ class DirTreeNode {
 class DirTree {
   public:
   DirTree(const std::string &rootName) {
-    std::cout << "AAAAAAAAAA" << std::endl;
     currentDirTree = this;
     int flags = FTW_PHYS;
     currentLvl = 0;
@@ -807,18 +812,6 @@ class DirTree {
       if (!p) {std::cout << "current parent nil" << std::endl; exit(0);}
       lastNode = p->add(name, level);
     }
-
-    /*
-    if (level > currentLvl) {
-      currentParent = lastNode;
-    } else if (level < currentLvl) {
-      if (!currentParent) {std::cout << "current parent nil(pop)" << std::endl; exit(0);}
-      currentParent = currentParent->parent;
-    }
-    if (!currentParent) {std::cout << "current parent nil" << std::endl; exit(0);}
-    lastNode = currentParent->add(name);
-    currentLvl = level;
-    */
   };
 
   void imgui() {
