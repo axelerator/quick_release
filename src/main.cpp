@@ -736,7 +736,6 @@ class DirTreeNode {
   DirTreeNode(const std::string &name, DirTreeNode *parent, int level) : name(name), parent(parent), level(level) {}
 
   DirTreeNode *add(const char *name, int level) {
-    std::cout << "adding " << name << " to " << this->name << std::endl;
     std::string fileName = name;
     DirTreeNode *child = new DirTreeNode(fileName, this, level);
     children.push_back(child);
@@ -745,7 +744,7 @@ class DirTreeNode {
 
   const std::string fullPath() {
     auto prefix = parent ? parent->fullPath() : "";
-    return  + "/" + name;
+    return  prefix + name + "/";
   }
 
   void inspect() {
@@ -756,22 +755,37 @@ class DirTreeNode {
     }
   }
 
-  void mkImgui() {
-    if (children.size()) {
+  void mkImgui(DirTreeNode **addedDir) {
+    if (name.c_str()[0] == '.' && level > 0) return;
+    ImGui::PushID(fullPath().c_str());
+    if (level == 0) {
+        if (ImGui::SmallButton("..")) {
+          *addedDir = (DirTreeNode *)-1;
+        }
+        for (auto child : children) {
+          child->mkImgui(addedDir);
+        }
+    } else if (children.size()) {
       const bool open = ImGui::TreeNode(name.c_str());
       ImGui::SameLine();      
-      const bool log_to_file = ImGui::SmallButton("add");
+      if ( ImGui::SmallButton("add")) {
+          *addedDir = this;
+      }
       if (open) {
         for (auto child : children) {
-          child->mkImgui();
+          child->mkImgui(addedDir);
         }
         ImGui::TreePop();
       }
     } else {
         ImGui::Text(name.c_str());
         ImGui::SameLine();      
-        const bool log_to_file = ImGui::SmallButton("add");
+        if (ImGui::SmallButton("add")) {
+          *addedDir = this;
+        }
     }
+    ImGui::PopID();
+
   }
 
   std::string name;
@@ -814,8 +828,12 @@ class DirTree {
     }
   };
 
-  void imgui() {
-    root->mkImgui();
+  void imgui(DirTreeNode **addedDir) {
+    root->mkImgui(addedDir);
+  }
+  
+  const std::string &rootName() {
+    return root->name;
   }
 
   private:
@@ -829,10 +847,7 @@ int ftwCallback(const char *file, const struct stat *sb, int flag, struct FTW *s
 	int retval = 0;
 	const char *name = file + s->base;
 
-	//printf("%*s", s->level , "");	/* indent over */
-
   if (flag == FTW_D) {
-		printf("%s (directory)%i\n", name, s->level);
     currentDirTree->add(name, s->level);
   }
   return 0;
@@ -857,8 +872,8 @@ int main(int argc, char** argv)
   //Geometry g(tesla, screen);
   InitImGui();
   bool save_now = false;
-    DirTree d("./");
-
+  DirTree *dirTree =new DirTree("./");
+  DirTreeNode *addedDir = 0;
   while (!glfwWindowShouldClose(window))
     {
         ImGuiIO& io = ImGui::GetIO();
@@ -870,7 +885,17 @@ int main(int argc, char** argv)
         static bool show_debug_window = false;
         static bool show_controls = false;
         static float f;
-        d.imgui();
+        dirTree->imgui(&addedDir);
+        if (addedDir) {
+          if ((long)(addedDir) == -1) {
+            std::cout << ".." << std::endl;
+            dirTree = new DirTree("../" + dirTree->rootName());
+
+          } else {
+            std::cout << addedDir->fullPath() << std::endl;
+          }
+          addedDir = 0;
+        }
         if (show_debug_window) {
           // Create a simple window
           // Tip: if we don't call ImGui::Begin()/ImGui::End() the widgets appears in a window automatically called "Debug"
@@ -922,13 +947,11 @@ int main(int argc, char** argv)
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        //g.draw(&parameters);
         ImGui::Render();
         glfwSwapBuffers(window);
     }
     ImGui::Shutdown();
     glfwTerminate();
     config.save();
-    d.inspect();
     return 0;
 }
