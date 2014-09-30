@@ -32,7 +32,112 @@ enum Errors {
 
 enum InputImageState {NEW, LOADED, FAILED};
 
+char* readFile(FILE *handler) {
+  char *buffer = NULL;
+  int string_size,read_size;
 
+  if (handler)
+  {
+    //seek the last byte of the file
+    fseek(handler,0,SEEK_END);
+    //offset from the first to the last byte, or in other words, filesize
+    string_size = ftell (handler);
+    //go back to the start of the file
+    rewind(handler);
+
+    //allocate a string that can hold it all
+    buffer = (char*) malloc (sizeof(char) * (string_size + 1) );
+    //read it all in one operation
+    read_size = fread(buffer,sizeof(char),string_size,handler);
+    //fread doesnt set it so put a \0 in the last position
+    //and buffer is now officialy a string
+    buffer[string_size] = '\0';
+
+    if (string_size != read_size) {
+      //something went wrong, throw away the memory and set
+      //the buffer to NULL
+      free(buffer);
+      buffer = NULL;
+    }
+  }
+
+  return buffer;
+}
+
+class SourceImage {
+  public:
+    SourceImage(const json11::Json &jsonConfig) {
+      filename = jsonConfig["filename"].string_value();
+    }
+
+    json11::Json to_json() {
+      json11::Json jsonConfig = json11::Json::object({
+          { "filename", filename }
+          });
+      return jsonConfig;
+    }
+
+    std::string filename;
+};
+
+class SourceDir {
+  public:
+
+    SourceDir(const std::string &path) : path(path), loaded(false) {
+    }
+
+    void activate() {
+      if (!loaded) {
+        load();
+      }
+    }
+
+    void imgui(ImGuiWindowFlags layout_flags) {
+        bool t = true;
+        ImGui::Begin(path.c_str(), &t, ImVec2(200,500), 1.0, layout_flags);
+        for( auto &i : sourceImages) {
+            ImGui::Text(i.filename.c_str());
+
+        }
+        ImGui::End();
+    }
+
+    void load() {
+      FILE *handler = fopen((path + ".quick_release/config").c_str(), "r");
+      if (handler) {
+        char *configString = readFile(handler);
+        string err;
+        json11::Json configJson = json11::Json::parse(configString, err);
+
+        for (auto &k : configJson["images"].array_items()) {
+          sourceImages.push_back(SourceImage(k));
+        }
+      } else {
+
+      }
+      loaded = true;
+    }
+
+    void save() {
+      json11::Json::array jsonImages;
+      for (auto &image : sourceImages) {
+        jsonImages.push_back(image.to_json());
+      }
+
+      json11::Json jsonConfig = json11::Json::object({
+          { "images", jsonImages }
+          });
+
+      std::string jsonStr = jsonConfig.dump();
+      std::ofstream outfile (path,std::ofstream::binary);
+      outfile.write (jsonStr.c_str(), jsonStr.length());
+      outfile.close();
+    }
+
+    const std::string path;
+    bool loaded;
+    std::vector<SourceImage> sourceImages;
+};
 
 class Config {
   public:
@@ -44,8 +149,15 @@ class Config {
       char *configString = readFile(handler);
       string err;
       json11::Json configJson = json11::Json::parse(configString, err);
+      std::cout << configString << std::endl;
+      for (auto &k : configJson["directories"].array_items()) {
+        directories.push_back(k.string_value());
+      }
     } else {
 
+    }
+    for (auto &dir_name : directories) {
+      sourceDirs.push_back(SourceDir(dir_name));
     }
   }
 
@@ -64,43 +176,21 @@ class Config {
     outfile.write (jsonStr.c_str(), jsonStr.length());
     outfile.close();
   }
-  private:
 
-  char* readFile(FILE *handler) {
-    char *buffer = NULL;
-    int string_size,read_size;
+  void addDirectory(const std::string &path) {
+    directories.push_back(path);
+  }
 
-    if (handler)
-    {
-      //seek the last byte of the file
-      fseek(handler,0,SEEK_END);
-      //offset from the first to the last byte, or in other words, filesize
-      string_size = ftell (handler);
-      //go back to the start of the file
-      rewind(handler);
-
-      //allocate a string that can hold it all
-      buffer = (char*) malloc (sizeof(char) * (string_size + 1) );
-      //read it all in one operation
-      read_size = fread(buffer,sizeof(char),string_size,handler);
-      //fread doesnt set it so put a \0 in the last position
-      //and buffer is now officialy a string
-      buffer[string_size] = '\0';
-
-      if (string_size != read_size) {
-        //something went wrong, throw away the memory and set
-        //the buffer to NULL
-        free(buffer);
-        buffer = NULL;
-      }
-    }
-
-    return buffer;
+  void activate(SourceDir &newDir) {
+    newDir.activate();
+    current = &newDir;
   }
 
 
   const std::string path;
-  const std::vector<string> directories;
+  std::vector<string> directories;
+  std::vector<SourceDir> sourceDirs;
+  SourceDir *current;
 };
 
 class InputImage {
@@ -743,7 +833,7 @@ class DirTreeNode {
   }
 
   const std::string fullPath() {
-    auto prefix = parent ? parent->fullPath() : "";
+    auto prefix = level > 1 ? parent->fullPath() : "./";
     return  prefix + name + "/";
   }
 
@@ -767,7 +857,7 @@ class DirTreeNode {
         }
     } else if (children.size()) {
       const bool open = ImGui::TreeNode(name.c_str());
-      ImGui::SameLine();      
+      ImGui::SameLine();
       if ( ImGui::SmallButton("add")) {
           *addedDir = this;
       }
@@ -779,7 +869,7 @@ class DirTreeNode {
       }
     } else {
         ImGui::Text(name.c_str());
-        ImGui::SameLine();      
+        ImGui::SameLine();
         if (ImGui::SmallButton("add")) {
           *addedDir = this;
         }
@@ -831,7 +921,7 @@ class DirTree {
   void imgui(DirTreeNode **addedDir) {
     root->mkImgui(addedDir);
   }
-  
+
   const std::string &rootName() {
     return root->name;
   }
@@ -858,6 +948,7 @@ int ftwCallback(const char *file, const struct stat *sb, int flag, struct FTW *s
 int main(int argc, char** argv)
 {
   Config config(".quickrelease.cfg");
+  config.load();
   InitGL();
   Parameters parameters = { .exposure = 1.0,
                             .shadows = 0.0,
@@ -874,6 +965,8 @@ int main(int argc, char** argv)
   bool save_now = false;
   DirTree *dirTree =new DirTree("./");
   DirTreeNode *addedDir = 0;
+  bool show_dir_browser = false;
+  const ImGuiWindowFlags layout_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove ;
   while (!glfwWindowShouldClose(window))
     {
         ImGuiIO& io = ImGui::GetIO();
@@ -881,20 +974,25 @@ int main(int argc, char** argv)
         glfwPollEvents();
         UpdateImGui();
 
-        static bool show_test_window = true;
-        static bool show_debug_window = false;
-        static bool show_controls = false;
+        static bool show_test_window = false;
+        static bool show_debug_window = true;
+        static bool show_controls = true;
         static float f;
-        dirTree->imgui(&addedDir);
-        if (addedDir) {
-          if ((long)(addedDir) == -1) {
-            std::cout << ".." << std::endl;
-            dirTree = new DirTree("../" + dirTree->rootName());
+        if (show_dir_browser) {
+          ImGui::Begin("Add a directory with images..", &show_dir_browser, ImVec2(200,500), 1.0, layout_flags);
+          dirTree->imgui(&addedDir);
+          if (addedDir) {
+            if ((long)(addedDir) == -1) {
+              std::cout << ".." << std::endl;
+              dirTree = new DirTree("../" + dirTree->rootName());
 
-          } else {
-            std::cout << addedDir->fullPath() << std::endl;
+            } else {
+              config.addDirectory(addedDir->fullPath());
+            }
+            addedDir = 0;
+            show_dir_browser = false;
           }
-          addedDir = 0;
+          ImGui::End();
         }
         if (show_debug_window) {
           // Create a simple window
@@ -924,11 +1022,20 @@ int main(int argc, char** argv)
             ImGui::ShowTestWindow(&show_test_window);
         }
         // Show another simple window
+        if (config.current) {
+          config.current->imgui(layout_flags);
+        }
         if (show_controls)
         {
-            const ImGuiWindowFlags layout_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove ;
+            for (auto &dir : config.sourceDirs) {
+              if (ImGui::Button(dir.path.c_str())) {
+                config.activate(dir);
+              }
+            }
+
             ImGui::SetNewWindowDefaultPos(ImVec2(0,0));
             ImGui::Begin("Adjustments", &show_controls, ImVec2(200,500), 1.0, layout_flags);
+            show_dir_browser ^= ImGui::Button("Add Directory");
             ImGui::Text("Exposure");
             ImGui::SliderFloat("f0", &parameters.exposure, 0.0f,2.0f);
             ImGui::Text("Shadows");
@@ -937,8 +1044,6 @@ int main(int argc, char** argv)
             ImGui::SliderFloat("f2", &parameters.highlights, 0.0f,1.0f);
             ImGui::Text("Contrast");
             ImGui::SliderFloat("f3", &parameters.contrast, 0.0f,1.0f);
-            std::string fout("out.png");
-            //if (ImGui::Button("Save")) {g.writeToDisk(fout, &parameters, 1280,1024);}
             ImGui::End();
         }
 
