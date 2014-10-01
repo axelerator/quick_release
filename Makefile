@@ -3,14 +3,21 @@
 #    brew install glew
 #    brew install glfw3
 #
-CXXFLAGS=-framework OpenGL -framework Cocoa -framework IOKit 
-CXXFLAGS+=-I/usr/local/Cellar/glew/1.11.0/include -I/usr/local/Cellar/glfw3/3.0.4/include
-CXXFLAGS+=-L/usr/local/Cellar/glew/1.11.0/lib -L/usr/local/Cellar/glfw3/3.0.4/lib
-CXXFLAGS+=-lglew -lglfw3
-CXXFLAGS+=-I../../
-CXXFLAGS+= -D__APPLE__ -std=c++11 -stdlib=libc++
+INCLUDE=-I/usr/local/Cellar/glew/1.11.0/include -I/usr/local/Cellar/glfw3/3.0.4/include
+
+LDFLAGS=-framework OpenGL -framework Cocoa -framework IOKit 
+LDFLAGS+=-L/usr/local/Cellar/glew/1.11.0/lib -L/usr/local/Cellar/glfw3/3.0.4/lib
+LDFLAGS+=-lglew -lglfw3
+
+CXXFLAGS= -D__APPLE__ -std=c++11 -stdlib=libc++
 
 EXECUTABLE=build/quickrelease
+
+SOURCES = $(wildcard *.cpp)
+OBJECTS = $(SOURCES:.cpp=.o)
+
+build/%.o: src/%.cpp
+	$(CXX) $(CXXFLAGS) -c -o build/$*.o src/$*.cpp  $(INCLUDE)
 
 all: src/main.cpp include/imgui/imgui.cpp include/json11/json11.cpp
 	$(CXX) $(CXXFLAGS) -o $(EXECUTABLE)  $^

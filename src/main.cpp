@@ -9,28 +9,27 @@
 #include <iostream>
 #include <string>
 #include <ftw.h>
+#include <sys/stat.h>
+#include <limits.h>     /* for PATH_MAX */
+#include <unistd.h>	/* for getdtablesize(), getcwd() declarations */
 
-#define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "../include/stb/stb_image.h"                  // for .png loading
-#include "../include/stb/stb_image_write.h"
 #include "../include/imgui/imgui.h"
 #include "../include/json11/json11.hpp"
 #ifdef _MSC_VER
 #pragma warning (disable: 4996)         // 'This function or variable may be unsafe': strcpy, strdup, sprintf, vsnprintf, sscanf, fopen
 #endif
 
-#define debug(format, arg) printf(format, arg)
-
 using namespace std;
 static GLFWwindow* window;
 static GLuint fontTex;
 
-enum Errors {
 
-};
+static ImGuiTextBuffer dlog;
+void debug(const std::string &s) {
+  dlog.append(s.c_str());
+  dlog.append("\n");
+}
 
-enum InputImageState {NEW, LOADED, FAILED};
 
 char* readFile(FILE *handler) {
   char *buffer = NULL;
@@ -64,271 +63,6 @@ char* readFile(FILE *handler) {
   return buffer;
 }
 
-class SourceImage {
-  public:
-    SourceImage(const json11::Json &jsonConfig) {
-      filename = jsonConfig["filename"].string_value();
-    }
-
-    json11::Json to_json() {
-      json11::Json jsonConfig = json11::Json::object({
-          { "filename", filename }
-          });
-      return jsonConfig;
-    }
-
-    std::string filename;
-};
-
-class SourceDir {
-  public:
-
-    SourceDir(const std::string &path) : path(path), loaded(false) {
-    }
-
-    void activate() {
-      if (!loaded) {
-        load();
-      }
-    }
-
-    void imgui(ImGuiWindowFlags layout_flags) {
-        bool t = true;
-        ImGui::Begin(path.c_str(), &t, ImVec2(200,500), 1.0, layout_flags);
-        for( auto &i : sourceImages) {
-            ImGui::Text(i.filename.c_str());
-
-        }
-        ImGui::End();
-    }
-
-    void load() {
-      FILE *handler = fopen((path + ".quick_release/config").c_str(), "r");
-      if (handler) {
-        char *configString = readFile(handler);
-        string err;
-        json11::Json configJson = json11::Json::parse(configString, err);
-
-        for (auto &k : configJson["images"].array_items()) {
-          sourceImages.push_back(SourceImage(k));
-        }
-      } else {
-
-      }
-      loaded = true;
-    }
-
-    void save() {
-      json11::Json::array jsonImages;
-      for (auto &image : sourceImages) {
-        jsonImages.push_back(image.to_json());
-      }
-
-      json11::Json jsonConfig = json11::Json::object({
-          { "images", jsonImages }
-          });
-
-      std::string jsonStr = jsonConfig.dump();
-      std::ofstream outfile (path,std::ofstream::binary);
-      outfile.write (jsonStr.c_str(), jsonStr.length());
-      outfile.close();
-    }
-
-    const std::string path;
-    bool loaded;
-    std::vector<SourceImage> sourceImages;
-};
-
-class Config {
-  public:
-  Config(const std::string path) : path(path) {};
-
-  void load() {
-    FILE *handler = fopen(path.c_str(),"r");
-    if (handler) {
-      char *configString = readFile(handler);
-      string err;
-      json11::Json configJson = json11::Json::parse(configString, err);
-      std::cout << configString << std::endl;
-      for (auto &k : configJson["directories"].array_items()) {
-        directories.push_back(k.string_value());
-      }
-    } else {
-
-    }
-    for (auto &dir_name : directories) {
-      sourceDirs.push_back(SourceDir(dir_name));
-    }
-  }
-
-  void save() {
-    json11::Json::array jsonDirs;
-    for (auto &dir : directories) {
-      jsonDirs.push_back(dir);
-    }
-
-    json11::Json jsonConfig = json11::Json::object({
-        { "directories", jsonDirs }
-        });
-
-    std::string jsonStr = jsonConfig.dump();
-    std::ofstream outfile (path,std::ofstream::binary);
-    outfile.write (jsonStr.c_str(), jsonStr.length());
-    outfile.close();
-  }
-
-  void addDirectory(const std::string &path) {
-    directories.push_back(path);
-  }
-
-  void activate(SourceDir &newDir) {
-    newDir.activate();
-    current = &newDir;
-  }
-
-
-  const std::string path;
-  std::vector<string> directories;
-  std::vector<SourceDir> sourceDirs;
-  SourceDir *current;
-};
-
-class InputImage {
-  public:
-
-  InputImage(const std::string& filename)
-    :filename(filename), state(NEW) {
-  }
-
-  ~InputImage() {
-  }
-
-  GLuint textureId() {
-    if (this->state == NEW) load();
-    return textureId_;
-  }
-
-  float ratio() {
-    if (this->state == NEW) load();
-    return (float)width/height;
-  }
-
-  private:
-
-   void load() {
-    FILE *file = fopen(filename.c_str(), "rb");
-    if (!file) return ;
-
-    int comp;
-    unsigned char *data = stbi_load_from_file(file, &width, &height, &comp, 0);
-    fclose(file);
-
-    // Create one OpenGL texture
-    GLuint textureID;
-    glGenTextures(1, &textureID);
-
-    // "Bind" the newly created texture : all future texture functions will modify this texture
-    glBindTexture(GL_TEXTURE_2D, textureID);
-
-    // Give the image to OpenGL
-    glTexImage2D(GL_TEXTURE_2D, 0,GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
-
-    // OpenGL has now copied the data. Free our own version
-    delete [] data;
-    // ... nice trilinear filtering.
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glGenerateMipmap(GL_TEXTURE_2D);
-
-    // Return the ID of the texture we just created
-    textureId_ = textureID;
-    this->state = LOADED;
-  }
-
-  const std::string filename;
-  int width;
-  int height;
-  InputImageState state;
-  GLuint textureId_;
-};
-
-GLuint LoadShaders(const char * vertex_file_path,const char * fragment_file_path){
-
-    // Create the shaders
-    GLuint VertexShaderID = glCreateShader(GL_VERTEX_SHADER);
-    GLuint FragmentShaderID = glCreateShader(GL_FRAGMENT_SHADER);
-
-    // Read the Vertex Shader code from the file
-    std::string VertexShaderCode;
-    std::ifstream VertexShaderStream(vertex_file_path, std::ios::in);
-    if(VertexShaderStream.is_open())
-    {
-        std::string Line = "";
-        while(getline(VertexShaderStream, Line))
-            VertexShaderCode += "\n" + Line;
-        VertexShaderStream.close();
-    }
-
-    // Read the Fragment Shader code from the file
-    std::string FragmentShaderCode;
-    std::ifstream FragmentShaderStream(fragment_file_path, std::ios::in);
-    if(FragmentShaderStream.is_open()){
-        std::string Line = "";
-        while(getline(FragmentShaderStream, Line))
-            FragmentShaderCode += "\n" + Line;
-        FragmentShaderStream.close();
-    }
-
-    GLint Result = GL_FALSE;
-    int InfoLogLength;
-
-    // Compile Vertex Shader
-    printf("Compiling shader : %s\n", vertex_file_path);
-    char const * VertexSourcePointer = VertexShaderCode.c_str();
-    glShaderSource(VertexShaderID, 1, &VertexSourcePointer , NULL);
-    glCompileShader(VertexShaderID);
-
-    // Check Vertex Shader
-    glGetShaderiv(VertexShaderID, GL_COMPILE_STATUS, &Result);
-    glGetShaderiv(VertexShaderID, GL_INFO_LOG_LENGTH, &InfoLogLength);
-    std::vector<char> VertexShaderErrorMessage(InfoLogLength);
-    glGetShaderInfoLog(VertexShaderID, InfoLogLength, NULL, &VertexShaderErrorMessage[0]);
-    fprintf(stdout, "%s\n", &VertexShaderErrorMessage[0]);
-
-    // Compile Fragment Shader
-    printf("Compiling shader : %s\n", fragment_file_path);
-    char const * FragmentSourcePointer = FragmentShaderCode.c_str();
-    glShaderSource(FragmentShaderID, 1, &FragmentSourcePointer , NULL);
-    glCompileShader(FragmentShaderID);
-
-    // Check Fragment Shader
-    glGetShaderiv(FragmentShaderID, GL_COMPILE_STATUS, &Result);
-    glGetShaderiv(FragmentShaderID, GL_INFO_LOG_LENGTH, &InfoLogLength);
-    std::vector<char> FragmentShaderErrorMessage(InfoLogLength);
-    glGetShaderInfoLog(FragmentShaderID, InfoLogLength, NULL, &FragmentShaderErrorMessage[0]);
-    fprintf(stdout, "%s\n", &FragmentShaderErrorMessage[0]);
-
-    // Link the program
-    fprintf(stdout, "Linking program\n");
-    GLuint ProgramID = glCreateProgram();
-    glAttachShader(ProgramID, VertexShaderID);
-    glAttachShader(ProgramID, FragmentShaderID);
-    glLinkProgram(ProgramID);
-
-    // Check the program
-    glGetProgramiv(ProgramID, GL_LINK_STATUS, &Result);
-    glGetProgramiv(ProgramID, GL_INFO_LOG_LENGTH, &InfoLogLength);
-    std::vector<char> ProgramErrorMessage( max(InfoLogLength, int(1)) );
-    glGetProgramInfoLog(ProgramID, InfoLogLength, NULL, &ProgramErrorMessage[0]);
-    fprintf(stdout, "%s\n", &ProgramErrorMessage[0]);
-
-    glDeleteShader(VertexShaderID);
-    glDeleteShader(FragmentShaderID);
-
-    return ProgramID;
-}
 
 
 GLuint loadBmp(const char * imagepath){
@@ -611,337 +345,6 @@ void UpdateImGui()
     ImGui::NewFrame();
 }
 
-class Rect {
-  public:
-  Rect(unsigned int width, unsigned int height):_width(width), _height(height){}
-
-  unsigned int width() {return _width;}
-  unsigned int height() {return _height;}
-
-  float ratio() const {return (float)_width/_height;}
-  bool landscape()  const{return ratio() >= 1.0; }
-  private:
-    const unsigned int _width;
-    const unsigned int _height;
-
-};
-
-typedef struct {
-	float exposure;
-	float shadows;
-  float highlights;
-  float contrast;
-} Parameters;
-
-class Geometry {
-  public:
-
-    Geometry(InputImage &image, const Rect &screen): inputImage(image), screen(screen) {
-      shaderProgramId = LoadShaders("vertex.vertexshader", "fragment.fragmentshader");
-      exposureUniform = glGetUniformLocation(shaderProgramId,"exposure");
-      shadowsUniform = glGetUniformLocation(shaderProgramId,"shadows");
-      highlightsUniform = glGetUniformLocation(shaderProgramId,"highlights");
-      contrastUniform = glGetUniformLocation(shaderProgramId,"contrast");
-
-      // Get a handle for our buffers
-      vertexPosition_modelspaceID = glGetAttribLocation(shaderProgramId, "vertexPosition_modelspace");
-      vertexUVID = glGetAttribLocation(shaderProgramId, "vertexUV");
-
-      // An array of 3 vectors which represents 3 vertices
-      float r = screen.ratio() / image.ratio(); //(1.0 / image.ratio()) *0.5;
-      static const GLfloat g_vertex_buffer_data[] = {
-       -1.0f, 1.0f * r, 0.0f,
-       -1.0f,-1.0f * r, 0.0f,
-        1.0f,-1.0f * r, 0.0f,
-        1.0f, 1.0f * r, 0.0f
-      };
-      // Two UV coordinatesfor each vertex. They were created with Blender. You'll learn shortly how to do this yourself.
-      static const GLfloat g_uv_buffer_data[] = {
-        0.0f, 0.0f,
-        0.0f, 1.0f,
-        1.0f, 1.0f,
-        1.0f, 0.0f
-      };
-
-      // Generate 1 buffer, put the resulting identifier in vertexbuffer
-      glGenBuffers(1, &vertexbuffer);
-      // The following commands will talk about our 'vertexbuffer' buffer
-      glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-      // Give our vertices to OpenGL.
-      glBufferData(GL_ARRAY_BUFFER, sizeof(g_vertex_buffer_data), g_vertex_buffer_data, GL_STATIC_DRAW);
-      glGenBuffers(1, &uvbuffer);
-      glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
-      glBufferData(GL_ARRAY_BUFFER, sizeof(g_uv_buffer_data), g_uv_buffer_data, GL_STATIC_DRAW);
-      glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-      // Get a handle for our "myTextureSampler" uniform
-      textureUniform  = glGetUniformLocation(shaderProgramId, "myTextureSampler");
-    }
-
-    void draw(Parameters *parameters) {
-      // Use our shader
-      glUseProgram(shaderProgramId);
-
-      glUniform1f(exposureUniform, parameters->exposure);
-      glUniform1f(shadowsUniform, parameters->shadows);
-      glUniform1f(highlightsUniform, parameters->highlights);
-      glUniform1f(contrastUniform, parameters->contrast);
-      // Set our "myTextureSampler" sampler to user Texture Unit 0
-      glUniform1i(textureUniform, 0);
-
-      // Bind our texture in Texture Unit 0
-      glActiveTexture(GL_TEXTURE0);
-      glBindTexture(GL_TEXTURE_2D, inputImage.textureId());
-
-      // 1rst attribute buffer : vertices
-      glEnableVertexAttribArray(vertexPosition_modelspaceID);
-      glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-      glVertexAttribPointer(
-          vertexPosition_modelspaceID,  // The attribute we want to configure
-          3,                            // size
-          GL_FLOAT,                     // type
-          GL_FALSE,                     // normalized?
-          0,                            // stride
-          (void*)0                      // array buffer offset
-          );
-
-      // 2nd attribute buffer : UVs
-      glEnableVertexAttribArray(vertexUVID);
-      glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
-      glVertexAttribPointer(
-          vertexUVID,                   // The attribute we want to configure
-          2,                            // size : U+V => 2
-          GL_FLOAT,                     // type
-          GL_FALSE,                     // normalized?
-          0,                            // stride
-          (void*)0                      // array buffer offset
-          );
-
-      // Draw the triangles !
-      glDrawArrays(GL_QUADS, 0, 4*3); // 12*3 indices starting at 0 -> 12 triangles
-
-      glDisableVertexAttribArray(vertexPosition_modelspaceID);
-      glDisableVertexAttribArray(vertexUVID);
-      glBindBuffer(GL_ARRAY_BUFFER, 0);
-      glUseProgram(0);
-    }
-
-    void writeToDisk(string &path, Parameters *parameters, unsigned int width, unsigned int height) {
-      // PREP for render2text ------------------------------
-      // The framebuffer, which regroups 0, 1, or more textures, and 0 or 1 depth buffer.
-      GLuint FramebufferName = 0;
-      glGenFramebuffers(1, &FramebufferName);
-      glBindFramebuffer(GL_FRAMEBUFFER, FramebufferName);
-      // The depth buffer
-      if ( !GLEW_ARB_framebuffer_object ){ // OpenGL 2.1 doesn't require this, 3.1+ does
-        printf("Your GPU does not provide framebuffer objects. Use a texture instead.");
-        return;
-      }
-      GLuint depthrenderbuffer;
-      glGenRenderbuffers(1, &depthrenderbuffer);
-
-      // The texture we're going to render to
-      GLuint renderedTexture;
-      glGenTextures(1, &renderedTexture);
-
-      // "Bind" the newly created texture : all future texture functions will modify this texture
-      glBindTexture(GL_TEXTURE_2D, renderedTexture);
-
-      // Give an empty image to OpenGL ( the last "0" means "empty" )
-      glTexImage2D(GL_TEXTURE_2D, 0,GL_RGB, width, height, 0,GL_RGB, GL_UNSIGNED_BYTE, 0);
-
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-
-      glBindRenderbuffer(GL_RENDERBUFFER, depthrenderbuffer);
-      glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width, height);
-      glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthrenderbuffer);
-
-      // Set "renderedTexture" as our colour attachement #0
-      glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, renderedTexture, 0);
-
-      // Set the list of draw buffers.
-      GLenum DrawBuffers[1] = {GL_COLOR_ATTACHMENT0};
-      glDrawBuffers(1, DrawBuffers); // "1" is the size of DrawBuffers
-
-      // Always check that our framebuffer is ok
-      if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-        return ;
-      // PREP for render2text END ------------------------------
-      //
-      // Render to our framebuffer
-      glBindFramebuffer(GL_FRAMEBUFFER, FramebufferName);
-      glViewport(0,0,width,height); // Render on the whole framebuffer, complete from the lower left corner to the upper right
-      // Rendering
-      glViewport(0, 0, width, height);
-      glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
-      glClear(GL_COLOR_BUFFER_BIT);
-      //
-      this->draw(parameters);
-
-      unsigned char *pixel_data = new unsigned char [width * height * 3];
-      glReadPixels(0,0,width,height, GL_RGB, GL_UNSIGNED_BYTE, pixel_data);
-
-      stbi_write_png(path.c_str(), width, height, 3, pixel_data, 0);
-      free(pixel_data);
-      // Render to display frame buffer again and free resources
-      glBindFramebuffer(GL_FRAMEBUFFER, 0);
-      GLuint deleteBuffers[] = {FramebufferName};
-      glDeleteFramebuffers(1, deleteBuffers);
-      GLuint deleteTexture[] = {renderedTexture};
-      glDeleteTextures(1, deleteTexture);
-      GLuint deleteBuffer[] = {depthrenderbuffer};
-      glDeleteRenderbuffers(1, deleteBuffer);
-    }
-
-  private:
-    InputImage &inputImage;
-    const Rect &screen;
-
-    GLuint shaderProgramId;
-    GLuint exposureUniform;
-    GLuint shadowsUniform;
-    GLuint highlightsUniform;
-    GLuint contrastUniform;
-    GLuint textureUniform;
-    GLuint vertexPosition_modelspaceID ;
-    GLuint vertexUVID;
-    GLuint vertexbuffer;
-    GLuint uvbuffer;
-
-};
-
-#include <limits.h>     /* for PATH_MAX */
-#include <unistd.h>	/* for getdtablesize(), getcwd() declarations */
-
-class DirTree;
-
-DirTree *currentDirTree;
-extern int ftwCallback(const char *file, const struct stat *sb, int flag, struct FTW *s);
-
-class DirTreeNode {
-  public:
-  DirTreeNode(const std::string &name, DirTreeNode *parent, int level) : name(name), parent(parent), level(level) {}
-
-  DirTreeNode *add(const char *name, int level) {
-    std::string fileName = name;
-    DirTreeNode *child = new DirTreeNode(fileName, this, level);
-    children.push_back(child);
-    return child;
-  }
-
-  const std::string fullPath() {
-    auto prefix = level > 1 ? parent->fullPath() : "./";
-    return  prefix + name + "/";
-  }
-
-  void inspect() {
-    printf("%*s", level , "");	/* indent over */
-    std::cout << fullPath() << "(" << children.size() << ")" << std::endl;
-    for (auto child : children) {
-      child->inspect();
-    }
-  }
-
-  void mkImgui(DirTreeNode **addedDir) {
-    if (name.c_str()[0] == '.' && level > 0) return;
-    ImGui::PushID(fullPath().c_str());
-    if (level == 0) {
-        if (ImGui::SmallButton("..")) {
-          *addedDir = (DirTreeNode *)-1;
-        }
-        for (auto child : children) {
-          child->mkImgui(addedDir);
-        }
-    } else if (children.size()) {
-      const bool open = ImGui::TreeNode(name.c_str());
-      ImGui::SameLine();
-      if ( ImGui::SmallButton("add")) {
-          *addedDir = this;
-      }
-      if (open) {
-        for (auto child : children) {
-          child->mkImgui(addedDir);
-        }
-        ImGui::TreePop();
-      }
-    } else {
-        ImGui::Text(name.c_str());
-        ImGui::SameLine();
-        if (ImGui::SmallButton("add")) {
-          *addedDir = this;
-        }
-    }
-    ImGui::PopID();
-
-  }
-
-  std::string name;
-  DirTreeNode *parent;
-  int level;
-  std::vector<DirTreeNode *> children;
-};
-
-class DirTree {
-  public:
-  DirTree(const std::string &rootName) {
-    currentDirTree = this;
-    int flags = FTW_PHYS;
-    currentLvl = 0;
-    root = new DirTreeNode(rootName, 0, 0);
-    currentParent = root;
-    lastNode = root;
-    int res = nftw(rootName.c_str(), ftwCallback,4, flags);
-  }
-
-  void inspect() {
-    root->inspect();
-  }
-
-  void add(const char* name, int level) {
-    if (level == 0) return;
-    if (level == lastNode->level) {
-      lastNode = lastNode->parent->add(name, level);
-    } else if (level > lastNode->level) {
-      lastNode = lastNode->add(name, level);
-    } else if (level < lastNode->level) {
-      int steps = lastNode->level - level + 1;
-      DirTreeNode *p = lastNode;
-      for (int i = 0; i < steps; ++i) {
-        p = p->parent;
-      }
-
-      if (!p) {std::cout << "current parent nil" << std::endl; exit(0);}
-      lastNode = p->add(name, level);
-    }
-  };
-
-  void imgui(DirTreeNode **addedDir) {
-    root->mkImgui(addedDir);
-  }
-
-  const std::string &rootName() {
-    return root->name;
-  }
-
-  private:
-  int currentLvl;
-  DirTreeNode *root;
-  DirTreeNode *currentParent;
-  DirTreeNode *lastNode;
-};
-
-int ftwCallback(const char *file, const struct stat *sb, int flag, struct FTW *s) {
-	int retval = 0;
-	const char *name = file + s->base;
-
-  if (flag == FTW_D) {
-    currentDirTree->add(name, s->level);
-  }
-  return 0;
-}
 
 
 // Application code
@@ -985,7 +388,6 @@ int main(int argc, char** argv)
             if ((long)(addedDir) == -1) {
               std::cout << ".." << std::endl;
               dirTree = new DirTree("../" + dirTree->rootName());
-
             } else {
               config.addDirectory(addedDir->fullPath());
             }
@@ -1011,6 +413,12 @@ int main(int argc, char** argv)
           ms_per_frame_accum += ms_per_frame[ms_per_frame_idx];
           ms_per_frame_idx = (ms_per_frame_idx + 1) % 120;
           const float ms_per_frame_avg = ms_per_frame_accum / 120;
+          {
+            ImGui::BeginChild("Log");
+            ImGui::TextUnformatted(dlog.begin(), dlog.end());
+            ImGui::EndChild();
+
+          }
           ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", ms_per_frame_avg, 1000.0f / ms_per_frame_avg);
         }
 
@@ -1027,14 +435,19 @@ int main(int argc, char** argv)
         }
         if (show_controls)
         {
+            ImGui::SetNewWindowDefaultPos(ImVec2(400,0));
+            ImGui::Begin("Imports", &show_controls, ImVec2(200,500), 1.0, layout_flags);
             for (auto &dir : config.sourceDirs) {
               if (ImGui::Button(dir.path.c_str())) {
+                debug(dir.path.c_str());
                 config.activate(dir);
               }
             }
+            ImGui::End();
 
             ImGui::SetNewWindowDefaultPos(ImVec2(0,0));
             ImGui::Begin("Adjustments", &show_controls, ImVec2(200,500), 1.0, layout_flags);
+            show_debug_window ^= ImGui::Button("Debug");
             show_dir_browser ^= ImGui::Button("Add Directory");
             ImGui::Text("Exposure");
             ImGui::SliderFloat("f0", &parameters.exposure, 0.0f,2.0f);
