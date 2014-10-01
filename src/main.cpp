@@ -12,9 +12,17 @@
 #include <sys/stat.h>
 #include <limits.h>     /* for PATH_MAX */
 #include <unistd.h>	/* for getdtablesize(), getcwd() declarations */
+#define STB_IMAGE_IMPLEMENTATION
+#include "../include/stb/stb_image.h"                  // for .png loading
 
 #include "../include/imgui/imgui.h"
 #include "../include/json11/json11.hpp"
+
+#include "types.h"
+#include "config.h"
+#include "dir_tree.h"
+#include "rect.h"
+
 #ifdef _MSC_VER
 #pragma warning (disable: 4996)         // 'This function or variable may be unsafe': strcpy, strdup, sprintf, vsnprintf, sscanf, fopen
 #endif

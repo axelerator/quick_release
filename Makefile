@@ -13,14 +13,17 @@ CXXFLAGS= -D__APPLE__ -std=c++11 -stdlib=libc++
 
 EXECUTABLE=build/quickrelease
 
-SOURCES = $(wildcard *.cpp)
+SOURCES = $(wildcard src/*.cpp)
 OBJECTS = $(SOURCES:.cpp=.o)
 
 build/%.o: src/%.cpp
 	$(CXX) $(CXXFLAGS) -c -o build/$*.o src/$*.cpp  $(INCLUDE)
 
-all: src/main.cpp include/imgui/imgui.cpp include/json11/json11.cpp
-	$(CXX) $(CXXFLAGS) -o $(EXECUTABLE)  $^
+
+#src/main.cpp include/imgui/imgui.cpp include/json11/json11.cpp
+all: $(OBJECTS) 
+	echo $(OBJECTS)
 
 clean:
+	$(CXX) $(CXXFLAGS) -o $(EXECUTABLE)  $^
 	rm $(EXECUTABLE)
