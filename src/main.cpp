@@ -12,7 +12,6 @@
 #include <sys/stat.h>
 #include <limits.h>     /* for PATH_MAX */
 #include <unistd.h>	/* for getdtablesize(), getcwd() declarations */
-#define STB_IMAGE_IMPLEMENTATION
 #include "../include/stb/stb_image.h"                  // for .png loading
 
 #include "../include/imgui/imgui.h"
@@ -39,37 +38,6 @@ void debug(const std::string &s) {
 }
 
 
-char* readFile(FILE *handler) {
-  char *buffer = NULL;
-  int string_size,read_size;
-
-  if (handler)
-  {
-    //seek the last byte of the file
-    fseek(handler,0,SEEK_END);
-    //offset from the first to the last byte, or in other words, filesize
-    string_size = ftell (handler);
-    //go back to the start of the file
-    rewind(handler);
-
-    //allocate a string that can hold it all
-    buffer = (char*) malloc (sizeof(char) * (string_size + 1) );
-    //read it all in one operation
-    read_size = fread(buffer,sizeof(char),string_size,handler);
-    //fread doesnt set it so put a \0 in the last position
-    //and buffer is now officialy a string
-    buffer[string_size] = '\0';
-
-    if (string_size != read_size) {
-      //something went wrong, throw away the memory and set
-      //the buffer to NULL
-      free(buffer);
-      buffer = NULL;
-    }
-  }
-
-  return buffer;
-}
 
 
 

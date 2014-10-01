@@ -21,6 +21,9 @@ class SourceDir {
     const std::string path;
     bool loaded;
     std::vector<SourceImage> sourceImages;
+  private:
+    char* readFile(FILE *handler);
+
 };
 
 #endif

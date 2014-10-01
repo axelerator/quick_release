@@ -49,7 +49,7 @@ int ftwSrcDirCallback(const char *file, const struct stat *sb, int flag, struct 
 }
 
 
-char* readFile(FILE *handler) {
+char* SourceDir::readFile(FILE *handler) {
   char *buffer = NULL;
   int string_size,read_size;
 
