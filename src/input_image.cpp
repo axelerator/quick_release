@@ -11,6 +11,7 @@ InputImage::~InputImage() {
    if (state != NEW) {
      GLuint t[] = {this->textureId()};
      glDeleteTextures(1, t);
+     delete _size;
    }
 }
 
@@ -21,17 +22,22 @@ GLuint InputImage::textureId() {
 
 float InputImage::ratio() {
   if (this->state == NEW) load();
-  return (float)width/height;
+  return _size->ratio();
 }
 
+const Rect& InputImage::size() {
+  if (this->state == NEW) load();
+  return *_size;
+}
 
 void InputImage::load() {
   FILE *file = fopen(filename.c_str(), "rb");
   if (!file) return ;
 
-  int comp;
+  int comp, width, height;
   unsigned char *data = stbi_load_from_file(file, &width, &height, &comp, 0);
   fclose(file);
+  _size = new Rect(width, height);
 
   // Create one OpenGL texture
   GLuint textureID;

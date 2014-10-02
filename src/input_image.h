@@ -5,6 +5,8 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
+#include "rect.h"
+
 enum InputImageState {NEW, LOADED, FAILED};
 
 class InputImage {
@@ -15,14 +17,14 @@ class InputImage {
 
   GLuint textureId();
   float ratio();
+  const Rect& size();
 
   private:
 
   void load();
 
   const std::string filename;
-  int width;
-  int height;
+  Rect *_size;
   InputImageState state;
   GLuint textureId_;
 };
