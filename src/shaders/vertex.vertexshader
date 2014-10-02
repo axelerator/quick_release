@@ -3,6 +3,8 @@
 // Input vertex data, different for all executions of this shader.
 attribute vec3 vertexPosition_modelspace;
 attribute vec2 vertexUV;
+//uniform float zoom;
+//uniform vec2 pos;
 
 // Output data ; will be interpolated for each fragment.
 varying vec2 UV;

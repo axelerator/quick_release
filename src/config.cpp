@@ -39,7 +39,7 @@ char* readFile(FILE *handler) {
   return buffer;
 }
 
-Config::Config(const std::string path) : path(path) {};
+Config::Config(const std::string path, const Rect &screen) : path(path), screen(screen) {};
 
 void Config::load() {
   FILE *handler = fopen(path.c_str(),"r");
@@ -55,7 +55,7 @@ void Config::load() {
 
   }
   for (auto &dir_name : directories) {
-    sourceDirs.push_back(SourceDir(dir_name));
+    sourceDirs.push_back(SourceDir(dir_name, this));
   }
 }
 

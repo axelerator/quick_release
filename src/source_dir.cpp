@@ -10,9 +10,13 @@
 #include "../include/imgui/imgui.h"
 #include "../include/json11/json11.hpp"
 
+#include "config.h"
 SourceDir *currentSourceDir = 0;
 
-SourceDir::SourceDir(const std::string &path) : path(path), loaded(false) {
+SourceDir::SourceDir(const std::string &path, Config *config) :
+  path(path),
+  loaded(false),
+  config(config) {
 }
 
 void SourceDir::activate() {
@@ -89,7 +93,7 @@ void SourceDir::load() {
     json11::Json configJson = json11::Json::parse(configString, err);
 
     for (auto &k : configJson["images"].array_items()) {
-      sourceImages.push_back(SourceImage(k));
+      sourceImages.push_back(SourceImage(this, k));
     }
   } else {
     int flags = FTW_PHYS;
@@ -118,4 +122,8 @@ void SourceDir::save() {
   outfile.close();
 }
 
+SourceImage *SourceDir::currentImage() {
+  if (!loaded) load();
+  return &(sourceImages.front());
+}
 

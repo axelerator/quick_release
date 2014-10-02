@@ -1,3 +1,5 @@
+#ifndef RECT_H
+#define RECT_H
 class Rect {
   public:
   Rect(unsigned int width, unsigned int height):_width(width), _height(height){}
@@ -11,4 +13,5 @@ class Rect {
     const unsigned int _width;
     const unsigned int _height;
 };
+#endif
 

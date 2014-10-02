@@ -23,16 +23,17 @@ class Geometry {
     InputImage &inputImage;
     const Rect &screen;
 
-    GLuint shaderProgramId;
-    GLuint exposureUniform;
-    GLuint shadowsUniform;
-    GLuint highlightsUniform;
-    GLuint contrastUniform;
-    GLuint textureUniform;
-    GLuint vertexPosition_modelspaceID ;
-    GLuint vertexUVID;
-    GLuint vertexbuffer;
-    GLuint uvbuffer;
+    static GLuint exposureUniform;
+    static GLuint shadowsUniform;
+    static GLuint highlightsUniform;
+    static GLuint contrastUniform;
+    static GLuint textureUniform;
+    static GLuint vertexPosition_modelspaceID ;
+    static GLuint vertexUVID;
+    static GLuint vertexbuffer;
+    static GLuint uvbuffer;
+    static GLuint shaderProgramId;
 
+    GLuint loadShaders(const char * vertex_file_path,const char * fragment_file_path);
 };
 #endif

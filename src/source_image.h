@@ -5,6 +5,7 @@
 
 #include <string>
 #include "input_image.h"
+#include "geometry.h"
 
 class SourceDir;
 
@@ -12,14 +13,16 @@ class SourceImage {
   public:
     SourceImage(const SourceDir *parent, const std::string &filename);
 
-    SourceImage(const json11::Json &jsonConfig);
+    SourceImage(const SourceDir *parent, const json11::Json &jsonConfig);
     json11::Json to_json();
     const InputImage &data();
+    Geometry *geometry();
     const std::string fullPath();
 
     const SourceDir *parent;
     std::string filename;
     InputImage *imageData;
+    Geometry *_geometry;
 };
 
 #endif

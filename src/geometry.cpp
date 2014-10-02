@@ -8,7 +8,18 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../include/stb/stb_image_write.h"
 
-GLuint LoadShaders(const char * vertex_file_path,const char * fragment_file_path){
+GLuint Geometry::shaderProgramId = -1;
+GLuint Geometry::exposureUniform;
+GLuint Geometry::shadowsUniform;
+GLuint Geometry::highlightsUniform;
+GLuint Geometry::contrastUniform;
+GLuint Geometry::textureUniform;
+GLuint Geometry::vertexPosition_modelspaceID ;
+GLuint Geometry::vertexUVID;
+GLuint Geometry::vertexbuffer;
+GLuint Geometry::uvbuffer;
+
+GLuint Geometry::loadShaders(const char * vertex_file_path,const char * fragment_file_path){
 
     // Create the shaders
     GLuint VertexShaderID = glCreateShader(GL_VERTEX_SHADER);
@@ -85,11 +96,13 @@ GLuint LoadShaders(const char * vertex_file_path,const char * fragment_file_path
 }
 
 Geometry::Geometry(InputImage &image, const Rect &screen): inputImage(image), screen(screen) {
-  shaderProgramId = LoadShaders("vertex.vertexshader", "fragment.fragmentshader");
-  exposureUniform = glGetUniformLocation(shaderProgramId,"exposure");
-  shadowsUniform = glGetUniformLocation(shaderProgramId,"shadows");
-  highlightsUniform = glGetUniformLocation(shaderProgramId,"highlights");
-  contrastUniform = glGetUniformLocation(shaderProgramId,"contrast");
+  if (shaderProgramId == -1) {
+    shaderProgramId = loadShaders("vertex.vertexshader", "fragment.fragmentshader");
+    exposureUniform = glGetUniformLocation(shaderProgramId,"exposure");
+    shadowsUniform = glGetUniformLocation(shaderProgramId,"shadows");
+    highlightsUniform = glGetUniformLocation(shaderProgramId,"highlights");
+    contrastUniform = glGetUniformLocation(shaderProgramId,"contrast");
+  }
 
   // Get a handle for our buffers
   vertexPosition_modelspaceID = glGetAttribLocation(shaderProgramId, "vertexPosition_modelspace");
