@@ -14,7 +14,7 @@ class SourceDir {
     SourceDir(const std::string &path, Config *config);
 
     void activate();
-    void imgui(ImGuiWindowFlags layout_flags);
+    void imgui(ImGuiWindowFlags layout_flags, SourceImage **currentImage);
     void add(const char* filename);
     const std::string config_file_path();
     void load();

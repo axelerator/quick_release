@@ -5,10 +5,13 @@
 #include <math.h>
 
 #include "../include/imgui/imgui.h"
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "../include/stb/stb_image_write.h"
+
+#include "image_data.h"
 
 GLuint Geometry::shaderProgramId = -1;
+GLuint Geometry::zoomUniform;
+GLuint Geometry::posUniform;
+GLuint Geometry::aspectUniform;
 GLuint Geometry::exposureUniform;
 GLuint Geometry::shadowsUniform;
 GLuint Geometry::highlightsUniform;
@@ -98,6 +101,9 @@ GLuint Geometry::loadShaders(const char * vertex_file_path,const char * fragment
 Geometry::Geometry(InputImage &image, const Rect &screen): inputImage(image), screen(screen) {
   if (shaderProgramId == -1) {
     shaderProgramId = loadShaders("vertex.vertexshader", "fragment.fragmentshader");
+    zoomUniform = glGetUniformLocation(shaderProgramId,"zoom");
+    posUniform = glGetUniformLocation(shaderProgramId,"pos");
+    aspectUniform = glGetUniformLocation(shaderProgramId,"aspect");
     exposureUniform = glGetUniformLocation(shaderProgramId,"exposure");
     shadowsUniform = glGetUniformLocation(shaderProgramId,"shadows");
     highlightsUniform = glGetUniformLocation(shaderProgramId,"highlights");
@@ -109,12 +115,11 @@ Geometry::Geometry(InputImage &image, const Rect &screen): inputImage(image), sc
   vertexUVID = glGetAttribLocation(shaderProgramId, "vertexUV");
 
   // An array of 3 vectors which represents 3 vertices
-  float r = screen.ratio() / image.ratio(); //(1.0 / image.ratio()) *0.5;
   static const GLfloat g_vertex_buffer_data[] = {
-   -1.0f, 1.0f * r, 0.0f,
-   -1.0f,-1.0f * r, 0.0f,
-    1.0f,-1.0f * r, 0.0f,
-    1.0f, 1.0f * r, 0.0f
+   -1.0f, 1.0f , 0.0f,
+   -1.0f,-1.0f , 0.0f,
+    1.0f,-1.0f , 0.0f,
+    1.0f, 1.0f , 0.0f
   };
   // Two UV coordinatesfor each vertex. They were created with Blender. You'll learn shortly how to do this yourself.
   static const GLfloat g_uv_buffer_data[] = {
@@ -146,6 +151,10 @@ void Geometry::draw(Parameters *parameters) {
   glUniform1f(exposureUniform, parameters->exposure);
   glUniform1f(shadowsUniform, parameters->shadows);
   glUniform1f(highlightsUniform, parameters->highlights);
+  glUniform1f(zoomUniform, parameters->zoom);
+  glUniform2f(posUniform, parameters->pos[0], parameters->pos[1]);
+  float r = screen.ratio() / inputImage.ratio(); //(1.0 / image.ratio()) *0.5;
+  glUniform1f(aspectUniform,r );
   glUniform1f(contrastUniform, parameters->contrast);
   // Set our "myTextureSampler" sampler to user Texture Unit 0
   glUniform1i(textureUniform, 0);
@@ -242,11 +251,9 @@ void Geometry::writeToDisk(std::string &path, Parameters *parameters, unsigned i
   //
   this->draw(parameters);
 
-  unsigned char *pixel_data = new unsigned char [width * height * 3];
-  glReadPixels(0,0,width,height, GL_RGB, GL_UNSIGNED_BYTE, pixel_data);
+  ImageData imageData(Rect(width, height));
+  glReadPixels(0,0,width,height, GL_RGB, GL_UNSIGNED_BYTE, imageData.data);
 
-  stbi_write_png(path.c_str(), width, height, 3, pixel_data, 0);
-  free(pixel_data);
   // Render to display frame buffer again and free resources
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   GLuint deleteBuffers[] = {FramebufferName};

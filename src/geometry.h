@@ -23,6 +23,9 @@ class Geometry {
     InputImage &inputImage;
     const Rect &screen;
 
+    static GLuint zoomUniform;
+    static GLuint posUniform;
+    static GLuint aspectUniform;
     static GLuint exposureUniform;
     static GLuint shadowsUniform;
     static GLuint highlightsUniform;

@@ -242,6 +242,9 @@ int main(int argc, char** argv)
 {
   InitGL();
   Parameters parameters = { .exposure = 1.0,
+                            .zoom = 1.0,
+                            .pos = {0.0, 0.0},
+                            .aspect = 1.0,
                             .shadows = 0.0,
                             .highlights = 0.0,
                             .contrast = 0.0};
@@ -321,9 +324,6 @@ int main(int argc, char** argv)
             ImGui::ShowTestWindow(&show_test_window);
         }
         // Show another simple window
-        if (config.current) {
-          config.current->imgui(layout_flags);
-        }
         if (show_controls)
         {
             ImGui::SetNewWindowDefaultPos(ImVec2(400,0));
@@ -349,6 +349,11 @@ int main(int argc, char** argv)
             ImGui::SliderFloat("f2", &parameters.highlights, 0.0f,1.0f);
             ImGui::Text("Contrast");
             ImGui::SliderFloat("f3", &parameters.contrast, 0.0f,1.0f);
+            ImGui::Text("Zoom");
+            ImGui::SliderFloat("43", &parameters.zoom, 0.1f,2.0f);
+            if (config.current) {
+              config.current->imgui(layout_flags, &currentImage);
+            }
             ImGui::End();
         }
 

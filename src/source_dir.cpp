@@ -25,11 +25,15 @@ void SourceDir::activate() {
   }
 }
 
-void SourceDir::imgui(ImGuiWindowFlags layout_flags) {
+void SourceDir::imgui(ImGuiWindowFlags layout_flags, SourceImage **currentImage) {
     bool t = true;
+    ImGui::SetNewWindowDefaultPos(ImVec2(0,500));
     ImGui::Begin(path.c_str(), &t, ImVec2(200,500), 1.0, layout_flags);
     for( auto &i : sourceImages) {
-        ImGui::Text(i.filename.c_str());
+        if (ImGui::Button(i.filename.c_str())) {
+          *currentImage = &i;
+        }
+
     }
     ImGui::End();
 }
