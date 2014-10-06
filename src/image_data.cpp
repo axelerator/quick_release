@@ -3,8 +3,8 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../include/stb/stb_image_write.h"
 
-ImageData::ImageData(const Rect& size): _size(size) {
-  data = new unsigned char [_size.width() * _size.height() * 3];
+ImageData::ImageData(const Rect& size): size(size) {
+  data = new unsigned char [size.width() * size.height() * 3];
 }
 
 ImageData::~ImageData() {
@@ -12,6 +12,6 @@ ImageData::~ImageData() {
 }
 
 void ImageData::writeToDisk(const std::string &filename) {
-  stbi_write_png(filename.c_str(), _size.width(), _size.height(), 3, data, 0);
+  stbi_write_png(filename.c_str(), size.width(), size.height(), 3, data, 0);
 }
 

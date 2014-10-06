@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <limits.h>     /* for PATH_MAX */
 #include <unistd.h>	/* for getdtablesize(), getcwd() declarations */
+#include <math.h>
 
 #include "../include/imgui/imgui.h"
 #include "../include/json11/json11.hpp"
@@ -39,7 +40,7 @@ void SourceDir::imgui(ImGuiWindowFlags layout_flags, SourceImage **currentImage)
 }
 
 void SourceDir::add(const char* filename) {
-  sourceImages.push_back(SourceImage(this, std::string(filename)));
+  sourceImages.push_back(SourceImage(this, std::string(filename), sourceImages.size()));
 }
 
 const std::string SourceDir::config_file_path() {
@@ -56,6 +57,32 @@ int ftwSrcDirCallback(const char *file, const struct stat *sb, int flag, struct 
   return 0;
 }
 
+void SourceDir::generatePreviews() {
+  unsigned int tilesPerRow = (unsigned int)ceil(sqrt(sourceImages.size()));
+  unsigned int rows = (unsigned int)ceil(sourceImages.size() / (float)tilesPerRow);
+  unsigned int tileWidth = 200;
+  ImageData previewTiles = ImageData(Rect(tilesPerRow * tileWidth, rows * tileWidth));
+  ImageData currentTile = ImageData(Rect(tileWidth, tileWidth));
+  unsigned int offset,row, col,index = 0;
+  unsigned int strideTile = tileWidth * 3;
+  unsigned int stridePreview = strideTile * tilesPerRow;
+  for( auto &sourceImage : sourceImages) {
+    sourceImage.geometry()->writeToMem(currentTile, 0);
+    row = index / tilesPerRow;
+    col = index % tilesPerRow;
+    for (unsigned int cy = 0; cy < tileWidth; ++cy) {
+      for (unsigned int cx = 0; cx < tileWidth; ++cx) {
+        offset = (stridePreview * ((row * tileWidth) + cy)) + strideTile * col;
+        offset += 3 * cx;
+        previewTiles.data[offset++] = currentTile.data[tileWidth * 3 * cy + 3 * cx];
+        previewTiles.data[offset++] = currentTile.data[tileWidth * 3 * cy + 3 * cx + 1];
+        previewTiles.data[offset++] = currentTile.data[tileWidth * 3 * cy + 3 * cx + 2];
+      }
+    }
+    ++index;
+  }
+  previewTiles.writeToDisk(".quick_release/preview.png");
+}
 
 char* SourceDir::readFile(FILE *handler) {
   char *buffer = NULL;
@@ -105,6 +132,7 @@ void SourceDir::load() {
     int res = nftw(path.c_str(), ftwSrcDirCallback, 1, flags);
     currentSourceDir = 0;
     mkdir((path + ".quick_release").c_str(), S_IRWXU | S_IRWXG | S_IRWXO);
+    generatePreviews();
     save();
   }
   loaded = true;

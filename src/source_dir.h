@@ -20,6 +20,7 @@ class SourceDir {
     void load();
     void save();
     SourceImage *currentImage();
+    void generatePreviews();
 
     const std::string path;
     bool loaded;

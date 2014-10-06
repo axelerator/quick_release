@@ -333,6 +333,7 @@ int main(int argc, char** argv)
                 debug(dir.path.c_str());
                 config.activate(dir);
                 currentImage = dir.currentImage();
+                parameters.aspect = screen.ratio() / currentImage->imageData->ratio(); //(1.0 / image.ratio()) *0.5;
               }
             }
             ImGui::End();

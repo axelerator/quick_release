@@ -6,7 +6,6 @@
 
 #include "../include/imgui/imgui.h"
 
-#include "image_data.h"
 
 GLuint Geometry::shaderProgramId = -1;
 GLuint Geometry::zoomUniform;
@@ -154,7 +153,7 @@ void Geometry::draw(Parameters *parameters) {
   glUniform1f(zoomUniform, parameters->zoom);
   glUniform2f(posUniform, parameters->pos[0], parameters->pos[1]);
   float r = screen.ratio() / inputImage.ratio(); //(1.0 / image.ratio()) *0.5;
-  glUniform1f(aspectUniform,r );
+  glUniform1f(aspectUniform, parameters->aspect );
   glUniform1f(contrastUniform, parameters->contrast);
   // Set our "myTextureSampler" sampler to user Texture Unit 0
   glUniform1i(textureUniform, 0);
@@ -253,6 +252,80 @@ void Geometry::writeToDisk(std::string &path, Parameters *parameters, unsigned i
 
   ImageData imageData(Rect(width, height));
   glReadPixels(0,0,width,height, GL_RGB, GL_UNSIGNED_BYTE, imageData.data);
+
+  // Render to display frame buffer again and free resources
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  GLuint deleteBuffers[] = {FramebufferName};
+  glDeleteFramebuffers(1, deleteBuffers);
+  GLuint deleteTexture[] = {renderedTexture};
+  glDeleteTextures(1, deleteTexture);
+  GLuint deleteBuffer[] = {depthrenderbuffer};
+  glDeleteRenderbuffers(1, deleteBuffer);
+}
+
+void Geometry::writeToMem(ImageData &imageData, Parameters *parameters) {
+  Parameters resettedParameters = { .exposure = 1.0,
+                            .zoom = -1.0,
+                            .pos = {0.0, 0.0},
+                            .aspect = imageData.size.ratio() / inputImage.ratio(),
+                            .shadows = 0.0,
+                            .highlights = 0.0,
+                            .contrast = 0.0};
+  // PREP for render2text ------------------------------
+  // The framebuffer, which regroups 0, 1, or more textures, and 0 or 1 depth buffer.
+  GLuint FramebufferName = 0;
+  glGenFramebuffers(1, &FramebufferName);
+  glBindFramebuffer(GL_FRAMEBUFFER, FramebufferName);
+  // The depth buffer
+  if ( !GLEW_ARB_framebuffer_object ){ // OpenGL 2.1 doesn't require this, 3.1+ does
+    printf("Your GPU does not provide framebuffer objects. Use a texture instead.");
+    return;
+  }
+  GLuint depthrenderbuffer;
+  glGenRenderbuffers(1, &depthrenderbuffer);
+
+  // The texture we're going to render to
+  GLuint renderedTexture;
+  glGenTextures(1, &renderedTexture);
+
+  // "Bind" the newly created texture : all future texture functions will modify this texture
+  glBindTexture(GL_TEXTURE_2D, renderedTexture);
+
+  // Give an empty image to OpenGL ( the last "0" means "empty" )
+  glTexImage2D(GL_TEXTURE_2D, 0,GL_RGB, imageData.size.width(), imageData.size.height(), 0,GL_RGB, GL_UNSIGNED_BYTE, 0);
+
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+
+  glBindRenderbuffer(GL_RENDERBUFFER, depthrenderbuffer);
+  glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, imageData.size.width(), imageData.size.height());
+  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthrenderbuffer);
+
+  // Set "renderedTexture" as our colour attachement #0
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, renderedTexture, 0);
+
+  // Set the list of draw buffers.
+  GLenum DrawBuffers[1] = {GL_COLOR_ATTACHMENT0};
+  glDrawBuffers(1, DrawBuffers); // "1" is the size of DrawBuffers
+
+  // Always check that our framebuffer is ok
+  if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+    return ;
+  // PREP for render2text END ------------------------------
+  //
+  // Render to our framebuffer
+  glBindFramebuffer(GL_FRAMEBUFFER, FramebufferName);
+  glViewport(0,0,imageData.size.width(),imageData.size.height()); // Render on the whole framebuffer, complete from the lower left corner to the upper right
+  // Rendering
+  glViewport(0, 0, imageData.size.width(), imageData.size.height());
+  glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT);
+  //
+  this->draw(&resettedParameters);
+
+  glReadPixels(0,0,imageData.size.width(),imageData.size.height(), GL_RGB, GL_UNSIGNED_BYTE, imageData.data);
 
   // Render to display frame buffer again and free resources
   glBindFramebuffer(GL_FRAMEBUFFER, 0);

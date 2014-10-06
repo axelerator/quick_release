@@ -10,6 +10,7 @@
 #include "input_image.h"
 #include "rect.h"
 #include "types.h"
+#include "image_data.h"
 
 class Geometry {
   public:
@@ -18,6 +19,7 @@ class Geometry {
     void draw(Parameters *parameters);
 
     void writeToDisk(std::string &path, Parameters *parameters, unsigned int width, unsigned int height);
+    void writeToMem(ImageData &imageData, Parameters *parameters);
 
   private:
     InputImage &inputImage;

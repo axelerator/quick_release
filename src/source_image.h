@@ -23,6 +23,7 @@ class SourceImage {
     std::string filename;
     InputImage *imageData;
     Geometry *_geometry;
+    unsigned int index;
 };
 
 #endif
